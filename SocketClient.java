@@ -1,5 +1,3 @@
-package Help.bin;
-
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectInputStream;
@@ -32,7 +30,7 @@ public class SocketClient{
 					
 					while(!server.isClosed()){
 						System.out.println("Waiting for input..");
-						String line = si.nextLine();
+						String line = si.NextLine();
 
 						if(!"quit".equalsIgnoreCase(line) && line !=null){
 							out.writeObject(line);
@@ -135,7 +133,4 @@ public class SocketClient{
 			e.printStackTrace();
 		}
 	}
-
-
-
 }
