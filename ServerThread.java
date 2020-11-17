@@ -9,6 +9,11 @@ public class ServerThread extends Thread{
     private ObjectOutputStream out; // to client
     private boolean isRunning = false;
     private Room currentRoom; // current room -> lobby by default
+    private String clientName;
+
+    public String getClientName(){
+        return clientName;
+    }
 
     protected synchronized Room getCurrentRoom(){
         return currentRoom;
@@ -29,13 +34,14 @@ public class ServerThread extends Thread{
         out = new ObjectOutputStream(client.getOutputStream());
         in = new ObjectInputStream(client.getInputStream());
     }
+
     /***
      * Sends message to client represented by this ServerThread
      * @param message 
      * @return
      */
 
-
+    @Deprecated
     protected boolean send(String message){ // changes to protected boolean method
         try{
             out.writeObject(message);
@@ -47,16 +53,73 @@ public class ServerThread extends Thread{
             return false;
         }
     }
+    
+    protected boolean send(String clientName, String message){
+        Payload payload = new Payload();
+        payload.setPayloadType(PayloadType.MESSAGE);
+        payload.setClientName(clientName);
+        payload.setMessage(message);
+
+        return sendPayload(payload);
+    }
+    
+    protected boolean sendConnectionStatus(String clientName, boolean isConnect){
+        Payload payload = new Payload();
+        if(isConnect){
+            payload.setPayloadType(PayloadType.CONNECT);
+        } else{
+            payload.setPayloadType(PayloadType.DISCONNECT);
+        }
+        payload.setClientName(clientName);
+        return sendPayload(payload);
+    }
+
+    private boolean sendPayload(Payload pt){
+        try{
+            out.writeObject(pt);
+            return true;
+        } catch (Exception e){
+            System.out.println("Error sending message to client (this means they most likely disconnected).");
+            e.printStackTrace();
+            cleanup();
+            return false;
+        }
+    }
+
+    private void processPayload(Payload pt){
+        switch (pt.getPayloadType()){
+            case CONNECT:
+                String n = pt.getClientName();
+                if (n != null){
+                    clientName = n;
+                    System.out.println("Username has been set to " + clientName);
+                    if(currentRoom != null){
+                        currentRoom.joinLobby(this);
+                    }
+                }
+                break;
+            case DISCONNECT:
+                isRunning = false;
+                break;
+            case MESSAGE:
+                currentRoom.sendMessage(this, pt.getMessage());
+                break;
+            default:
+                System.out.println("Unhandled payload on the server : " + pt);
+                break;
+        } 
+    }
+
 
     @Override
     public void run(){
         try{
             isRunning = true;
-            String fromClient;
-            while (isRunning && !client.isClosed() && (fromClient = (String) in.readObject()) != null){
+            Payload fromClient; // changed to payload type
+            while (isRunning && !client.isClosed() && (fromClient = (Payload) in.readObject()) != null){
                 System.out.println("Received from client: " + fromClient);
-                currentRoom.sendMessage(this, fromClient); // server updated to implement room functionality
-            } // close the while loop
+                processPayload(fromClient);
+            }           // close the while loop
         }
         catch (Exception e){
                 e.printStackTrace();
