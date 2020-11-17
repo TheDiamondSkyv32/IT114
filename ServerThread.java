@@ -1,5 +1,3 @@
-package Help.bin;
-
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -7,19 +5,38 @@ import java.net.Socket;
 
 public class ServerThread extends Thread{
     private Socket client;
-    private ObjectInputStream in;
-    private ObjectOutputStream out;
+    private ObjectInputStream in; // from client
+    private ObjectOutputStream out; // to client
     private boolean isRunning = false;
-    private SocketServer server;
+    private Room currentRoom; // current room -> lobby by default
 
-    public ServerThread(Socket myClient, SocketServer server) throws IOException{
+    protected synchronized Room getCurrentRoom(){
+        return currentRoom;
+    }
+
+    protected synchronized void setCurrentRoom(Room room){
+        if (room != null){
+            currentRoom = room;
+
+        } else {
+            System.out.println("Passed in room was null, this is a problem");
+        }
+    }
+
+    public ServerThread(Socket myClient, Room room) throws IOException{ // Change SocketServer to Room 
         this.client = myClient;
-        this.server = server;
+        this.currentRoom = room;
         out = new ObjectOutputStream(client.getOutputStream());
         in = new ObjectInputStream(client.getInputStream());
     }
+    /***
+     * Sends message to client represented by this ServerThread
+     * @param message 
+     * @return
+     */
 
-    public boolean send(String message){
+
+    protected boolean send(String message){ // changes to protected boolean method
         try{
             out.writeObject(message);
             return true;
@@ -38,23 +55,25 @@ public class ServerThread extends Thread{
             String fromClient;
             while (isRunning && !client.isClosed() && (fromClient = (String) in.readObject()) != null){
                 System.out.println("Received from client: " + fromClient);
-                server.broadcast(fromClient, this.getId());
-            }
+                currentRoom.sendMessage(this, fromClient); // server updated to implement room functionality
+            } // close the while loop
         }
-            catch (Exception e){
+        catch (Exception e){
                 e.printStackTrace();
                 System.out.println("Client has disconnected.");
-            } finally {
-                isRunning = false;
-                System.out.println("Cleaning up connection for ServerThread.");
-                cleanup();
+        } finally {
+            isRunning = false;
+            System.out.println("Cleaning up connection for ServerThread.");
+            cleanup();
             }
         }
 
     private void cleanup(){
-        if (server != null){
-            server.disconnect(this);
+        if (currentRoom != null){ // more server functionality offloaded to the Room
+            System.out.println(getName() + " removing self from the room: " + currentRoom.getName());
+            currentRoom.removeClient(this);
         }
+
         if (in != null){
             try{
                 in.close();
@@ -62,6 +81,7 @@ public class ServerThread extends Thread{
                 System.out.println("Input is already closed!");
             }
         }
+
         if (out != null){
             try{
                 out.close();
@@ -69,6 +89,7 @@ public class ServerThread extends Thread{
                 System.out.println("Client is already closed!");
             }
         }
+
         if (client != null && !client.isClosed()){
             try{
                 client.shutdownInput();
