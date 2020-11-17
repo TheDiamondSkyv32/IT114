@@ -4,24 +4,30 @@ import java.util.List;
 
 // I won't be using utils.Debug because my editor 
 // makes it a pain to use
-public class Room {
-    private SocketServer server;
+public class Room implements AutoCloseable {
+    private static SocketServer server; // changed to static
     private String name;
 
-    public Room(String name, SocketServer server){
-        this.name = name;
-        this.server = server;
+    // commands
+    private final static String COMMAND_TRIGGER = "/";
+    private final static String CREATE_ROOM = "createroom";
+    private final static String JOIN_ROOM = "joinroom";
 
+    public Room(String name){
+        this.name = name;
     }
 
     public String getName(){
         return name;
     }
 
+    public static void setServer(SocketServer server){
+        Room.server = server;
+    }
+
     private List<ServerThread> clients = new ArrayList<ServerThread>();
 
     protected synchronized void addClient(ServerThread client){
-
         client.setCurrentRoom(this);
 
         if (clients.indexOf(client) > -1){
@@ -29,12 +35,39 @@ public class Room {
 
         } else{
             clients.add(client);
-            sendMessage(client, " has joined the room " + getName());
+            if (client.getClientName() != null){ // broadcast that user has joined the room if name isn't null
+                sendMessage(client, " has joined the room " + getName());
+            }
         }
     }
+
     protected synchronized void removeClient(ServerThread client){
         clients.remove(client);
-        sendMessage(client, "has departed from the room.");
+        if (clients.size() > 0){ // while someone's in the room, we don't close it
+            sendMessage(client, "has departed from the room.");
+        } else {
+            cleanupEmptyRoom();
+        }
+    }
+
+    private void cleanupEmptyRoom(){
+        if (name == null || name.equalsIgnoreCase(SocketServer.LOBBY)){
+            return;
+        }
+        try {
+            System.out.println("Closing empty room : " + name);
+            close();
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+    }
+
+    protected void joinRoom(String room, ServerThread client){
+        server.joinRoom(room, client);
+    }
+
+    protected void joinLobby(ServerThread client){
+        server.joinLobby(client);
     }
 
     /*** 
@@ -49,24 +82,28 @@ public class Room {
         boolean wasCommand = false;
         
         try{
-            if (message.indexOf("/") > -1){
-                String[] comm = message.split("/");
+            if (message.indexOf(COMMAND_TRIGGER) > -1){
+                String[] comm = message.split(COMMAND_TRIGGER);
+
                 String part_1 = comm[1];
                 String[] comm2 = part_1.split(" ");
                 String command = comm2[0];
+                if (command != null){
+                    command = command.toLowerCase();
+                }
                 String roomName;
 
-                switch (command){
-                    case "createroom": 
+                switch(command){
+                    case CREATE_ROOM: 
                         roomName = comm2[1];
                         if (server.createNewRoom(roomName)){
-                            server.joinRoom(roomName, client);
+                            joinRoom(roomName, client);
                         }
                         wasCommand = true;
                         break;
-                    case "joinroom":
+                    case JOIN_ROOM:
                         roomName = comm2[1];
-                        server.joinRoom(roomName, client);
+                        joinRoom(roomName, client);
                         wasCommand = true;
                         break;     
                 }
@@ -76,6 +113,19 @@ public class Room {
         }
         return wasCommand;
     }
+
+    protected void sendConnectionStatus(String clientName, boolean isConnect){
+        Iterator<ServerThread> iter = clients.iterator();
+        while (iter.hasNext()){
+            ServerThread client = iter.next();
+            boolean messageSent = client.sendConnectionStatus(clientName, isConnect);
+            if (!messageSent){
+                iter.remove();
+                System.out.println("Removed client " + client.getId());
+            }
+        }
+    }
+
     /***
      * Takes the sender & message and broadcasts message to all clients in present room.
      * @parameter sender is the client sending the message
@@ -97,5 +147,23 @@ public class Room {
                 System.out.println("Removed client " + client.getId());
             }
         }
+    }
+
+    @Override 
+    public void close() throws Exception{
+        int clientCount = clients.size();
+        if (clientCount > 0){
+            System.out.print("Migrating " + clients.size() + " to Lobby");
+            Iterator<ServerThread> iter = clients.iterator();
+            Room lobby = server.getLobby();
+            while (iter.hasNext()){
+                ServerThread client = iter.next();
+                lobby.addClient(client);
+                iter.remove();
+            }
+            System.out.println("Done migrating " + clientCount + " to Lobby");
+        }
+        server.cleanupRoom(this);
+        name = null;
     }
 }
