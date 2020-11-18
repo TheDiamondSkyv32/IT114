@@ -16,8 +16,6 @@ public class SocketServer {
     private static final String PRELOBBY = "PreLobby";
     protected static final String LOBBY = "Lobby";
 
-
-
     private void start(int port){
         this.port = port;
         System.out.println("Waiting for client..");
@@ -44,9 +42,11 @@ public class SocketServer {
             }
         } catch (IOException e){
             e.printStackTrace();
+            
         } finally{
             try{
                 isRunning = false;
+                cleanup();
                 System.out.println("Closing server socket.");
             } catch (Exception e){
                 e.printStackTrace();
