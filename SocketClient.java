@@ -108,7 +108,7 @@ public class SocketClient implements AutoCloseable{
 		public void run(){
 			try{
 				Payload fromServer;
-				while (!server.isClosed() && (fromServer = (Payload) in.readObject()) != null){
+				while (!server.isClosed() && (fromServer = (Payload)in.readObject()) != null){
 					processPayload(fromServer);
 				}
 			}
