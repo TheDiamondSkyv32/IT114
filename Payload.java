@@ -2,7 +2,7 @@ import java.io.Serializable;
 
 public class Payload implements Serializable {
 
-    private static final long serialVersionUID = -6687715510484845706L;
+    private static final long serialVersionUID = -66837510484845706L;
 
     private String clientName;
 
@@ -21,7 +21,7 @@ public class Payload implements Serializable {
     }
 
     public String getMessage(){
-        return message;
+        return this.message;
     }
 
     private PayloadType payloadType;
