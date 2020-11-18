@@ -53,7 +53,12 @@ public class ServerThread extends Thread{
             return false;
         }
     }
-    
+    /***
+     * replacement for send(message)
+     * @param clientName
+     * @param message
+     * @return
+     */
     protected boolean send(String clientName, String message){
         Payload payload = new Payload();
         payload.setPayloadType(PayloadType.MESSAGE);
@@ -116,9 +121,10 @@ public class ServerThread extends Thread{
         try{
             isRunning = true;
             Payload fromClient; // changed to payload type
-            while (isRunning && !client.isClosed() && (fromClient = (Payload) in.readObject()) != null){
+            while (isRunning && !client.isClosed() && (fromClient =(Payload)in.readObject()) != null){
                 System.out.println("Received from client: " + fromClient);
                 processPayload(fromClient);
+                
             }           // close the while loop
         }
         catch (Exception e){
@@ -132,7 +138,7 @@ public class ServerThread extends Thread{
         }
 
     private void cleanup(){
-        if (currentRoom != null){ // more server functionality offloaded to the Room
+        if (currentRoom != null){ // more server functionality off-loaded to the Room
             System.out.println(getName() + " removing self from the room: " + currentRoom.getName());
             currentRoom.removeClient(this);
         }
