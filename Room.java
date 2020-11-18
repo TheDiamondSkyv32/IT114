@@ -138,10 +138,9 @@ public class Room implements AutoCloseable {
 
         }
         Iterator<ServerThread> iter = clients.iterator();
-        message = String.format("User[%s]: %s", sender.getName(), message);
         while (iter.hasNext()){
             ServerThread client = iter.next();
-            boolean messageSent = client.send(message);
+            boolean messageSent = client.send(sender.getClientName(), message);
             if (!messageSent){ // if messageSent is false, the ! turns the false to true and removes the user
                 iter.remove();
                 System.out.println("Removed client " + client.getId());
