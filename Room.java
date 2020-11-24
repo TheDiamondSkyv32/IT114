@@ -1,6 +1,8 @@
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
+import java.util.Scanner;
 
 // I won't be using utils.Debug because my editor 
 // makes it a pain to use
@@ -9,9 +11,12 @@ public class Room implements AutoCloseable {
     private String name;
 
     // commands
-    private final static String COMMAND_TRIGGER = "/";
-    private final static String CREATE_ROOM = "createroom";
-    private final static String JOIN_ROOM = "joinroom";
+    private static final String COMMAND_TRIGGER = "/";
+    private static final String CREATE_ROOM = "createroom";
+    private static final String JOIN_ROOM = "joinroom";
+    private static final String FLIP = "flip";
+    private static final String ROLL = "roll";
+    
 
     public Room(String name){
         this.name = name;
@@ -106,6 +111,28 @@ public class Room implements AutoCloseable {
                         joinRoom(roomName, client);
                         wasCommand = true;
                         break;     
+                    case FLIP:
+                        Random rand = new Random();
+                        int coin = rand.nextInt(2);
+                        String tempMessage_;
+                        if (coin == 1){
+                            tempMessage_ = ("\nThe results of the coin toss is... Heads!");
+                        }
+                        else{
+                            tempMessage_ = ("\nThe results of the coin toss is... Tails!");
+                        }
+                        
+                        sendMessage(client, tempMessage_);
+                        wasCommand = true;
+                        break;
+                    case ROLL:
+                    //TODO - let the user decide the upper-bound of the roll
+                        Random rand_1 = new Random();
+                        int dice = rand_1.nextInt(100) + 1;
+                        String tempMessage = ("\n" + client.getClientName() + " rolls " + String.valueOf(dice) + " point(s)");
+                        sendMessage(client, tempMessage);
+                        wasCommand = true;
+                        break;
                 }
             }
         } catch (Exception e){
