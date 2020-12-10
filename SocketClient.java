@@ -1,208 +1,295 @@
+package client;
+
 import java.io.IOException;
-import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.Scanner;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-public class SocketClient implements AutoCloseable{
-	private Socket server;
-	private Thread inputThread;
-	private Thread fromServerThread;
-	private String clientName;
+import server.Payload;
+import server.PayloadType;
 
-	private void readUserName(Scanner si){
-		System.out.println("Enter a username and press ENTER. ");
-		clientName = si.nextLine();
+public enum SocketClient {
+    INSTANCE; // see https://dzone.com/articles/java-singletons-using-enum "Making Singletons
+	      // with Enum"
+
+    private static Socket server;
+    private static Thread fromServerThread;
+    private static Thread clientThread;
+    private static String clientName;
+    private static ObjectOutputStream out;
+    private final static Logger log = Logger.getLogger(SocketClient.class.getName());
+    private static List<Event> events = new ArrayList<Event>();// change from event to list<event>
+
+    private Payload buildMessage(String message) {
+	Payload payload = new Payload();
+	payload.setPayloadType(PayloadType.MESSAGE);
+	payload.setClientName(clientName);
+	payload.setMessage(message);
+	return payload;
+    }
+
+    private Payload buildConnectionStatus(String name, boolean isConnect) {
+	Payload payload = new Payload();
+	if (isConnect) {
+	    payload.setPayloadType(PayloadType.CONNECT);
 	}
+	else {
+	    payload.setPayloadType(PayloadType.DISCONNECT);
+	}
+	payload.setClientName(name);
+	return payload;
+    }
 
-	private Payload buildConnectionStatus(String name, boolean isConnect){
-		Payload payload = new Payload();
-		if(isConnect){
-			payload.setPayloadType(PayloadType.CONNECT);
+    private void sendPayload(Payload p) {
+	try {
+	    out.writeObject(p);
+	}
+	catch (IOException e) {
+	    // TODO Auto-generated catch block
+	    e.printStackTrace();
+	}
+    }
+
+    private void listenForServerMessage(ObjectInputStream in) {
+	if (fromServerThread != null) {
+	    log.log(Level.INFO, "Server Listener is likely already running");
+	    return;
+	}
+	// Thread to listen for responses from server so it doesn't block main thread
+	fromServerThread = new Thread() {
+	    @Override
+	    public void run() {
+		try {
+		    Payload fromServer;
+		    // while we're connected, listen for Payloads from server
+		    while (!server.isClosed() && (fromServer = (Payload) in.readObject()) != null) {
+			processPayload(fromServer);
+		    }
 		}
-		else{
-			payload.setPayloadType(PayloadType.DISCONNECT);
-		}
-		payload.setClientName(name);
-		return payload;
-	}
-
-	private Payload buildMessage(String message){
-		Payload payload = new Payload();
-		payload.setPayloadType(PayloadType.MESSAGE);
-		payload.setClientName(clientName);
-		payload.setMessage(message);
-		return payload;
-	}
-
-	private void sendPayload(Payload pt, ObjectOutputStream out){
-		try{
-			out.writeObject(pt);
-		} catch (IOException e){
+		catch (Exception e) {
+		    if (!server.isClosed()) {
 			e.printStackTrace();
+			log.log(Level.INFO, "Server closed connection");
+		    }
+		    else {
+			log.log(Level.INFO, "Connection closed");
+		    }
 		}
-	}
-
-	public void connect(String address, int port){
-		try{
-			server = new Socket(address, port);
-			System.out.println("Client has connected.");
-		} catch(UnknownHostException e){
-			e.printStackTrace();
-		} catch(IOException e){
-			e.printStackTrace();
+		finally {
+		    close();
+		    log.log(Level.INFO, "Stopped listening to server input");
 		}
-	}
-
-	private void listenForKeyboard(Scanner si, ObjectOutputStream out){
-		if (inputThread != null){
-			System.out.println("Input listener is likely already running.");
-			return;
-		}
-		inputThread = new Thread(){
-			@Override
-			public void run(){
-				try{
-					readUserName(si);
-					sendPayload(buildConnectionStatus(clientName, true), out);
-
-					while (!server.isClosed()){
-						System.out.println("Waiting for input");
-						String line = si.nextLine();
-
-						if (!"quit".equalsIgnoreCase(line) && line !=null){
-							sendPayload(buildMessage(line), out);
-						} else {
-							System.out.println("Stopping the input thread.");
-							sendPayload(buildConnectionStatus(clientName, false), out);
-							break;
-						}
-						try{
-							sleep(51);
-						} catch (Exception e){
-							System.out.println("Problem sleeping thread!");
-							e.printStackTrace();
-						}
-					}
-				}
-				catch (Exception e){
-					e.printStackTrace();
-				}
-				finally{
-					close();
-					System.out.println("Stopped listening to console input.");
-						}
-					}
-				};
-				inputThread.start(); 
-			}
-	private void listenForServerMessage(ObjectInputStream in){
-		if(fromServerThread != null){
-			System.out.println("Server Listener is likely already running.");
-			return;
-		}
-		fromServerThread = new Thread(){
-		@Override		
-		public void run(){
-			try{
-				Payload fromServer;
-				while (!server.isClosed() && (fromServer = (Payload)in.readObject()) != null){
-					processPayload(fromServer);
-				}
-			}
-			catch (Exception e){
-
-				if (!server.isClosed()){
-					e.printStackTrace();
-					System.out.println("Server closed connection.");
-				} 
-				else {
-					System.out.println("Connection closed.");
-				}
-			}
-			finally{
-				close();
-				System.out.println("Stopped listening to server input");
-			}
-		}
+	    }
 	};
-	fromServerThread.start(); //start the thread
-}
+	fromServerThread.start();// start the thread
+    }
 
-	private void processPayload(Payload pt){
-		switch (pt.getPayloadType()){
-			case CONNECT:
-				System.out.println(pt.getClientName() + ": " + pt.getMessage());
-				break;
-			case DISCONNECT:
-				System.out.println(pt.getClientName() + ": " + pt.getMessage());
-				break;
-			case MESSAGE:
-				System.out.println(pt.getClientName() + ": " + pt.getMessage());
-				break;
-			default:
-			System.out.println("Unhandled payload on client : " + pt + "!");
-		}
+    private void sendOnClientConnect(String name, String message) {
+	Iterator<Event> iter = events.iterator();
+	while (iter.hasNext()) {
+	    Event e = iter.next();
+	    if (e != null) {
+		e.onClientConnect(name, message);
+	    }
 	}
+    }
 
-	
-		
-	public void start() throws IOException{
-		if (server == null){
-			return;
-		}
-		System.out.println("Client started.");
-		try(Scanner si = new Scanner(System.in);
-			ObjectOutputStream out = new ObjectOutputStream(server.getOutputStream());
-			ObjectInputStream in = new ObjectInputStream(server.getInputStream());){
-				listenForKeyboard(si, out);
-
-				listenForServerMessage(in);
-
-				while(!server.isClosed()){
-					Thread.sleep(69);
-
-				}
-			System.out.println("Exited loop.");
-			System.out.println("Press ENTER to stop the program.");
-		} catch (Exception e){
-			e.printStackTrace();
-		} finally{
-			close();
-		}
+    private void sendOnClientDisconnect(String name, String message) {
+	Iterator<Event> iter = events.iterator();
+	while (iter.hasNext()) {
+	    Event e = iter.next();
+	    if (e != null) {
+		e.onClientDisconnect(name, message);
+	    }
 	}
+    }
 
-	@Override
-	public void close(){
-		if(server != null && !server.isClosed()){
-			try{
-				server.close();
-				System.out.println("Closed socket.");
-			}
-			catch (IOException e){
-				e.printStackTrace();
-			}
-		}
+    private void sendOnMessage(String name, String message) {
+	Iterator<Event> iter = events.iterator();
+	while (iter.hasNext()) {
+	    Event e = iter.next();
+	    if (e != null) {
+		e.onMessageReceive(name, message);
+	    }
 	}
+    }
 
-	public static void main(String[] args){
-		int port = -1;
-		try{
-			port = Integer.parseInt(args[0]);
-		}
-		catch (Exception e){
-			System.out.println("Invalid port.");
-		}
-		if (port > -1){
-			try(SocketClient client = new SocketClient();){
-				client.connect("127.0.0.1", port);
-				client.start();
-			}
-		catch (IOException e){
-			e.printStackTrace();
-		}
+    private void sendOnChangeRoom() {
+	Iterator<Event> iter = events.iterator();
+	while (iter.hasNext()) {
+	    Event e = iter.next();
+	    if (e != null) {
+		e.onChangeRoom();
+	    }
 	}
-}
+    }
+
+    private void sendRoom(String roomName) {
+	Iterator<Event> iter = events.iterator();
+	while (iter.hasNext()) {
+	    Event e = iter.next();
+	    if (e != null) {
+		e.onGetRoom(roomName);
+	    }
+	}
+    }
+
+    /***
+     * Determine any special logic for different PayloadTypes
+     * 
+     * @param p
+     */
+    private void processPayload(Payload p) {
+
+	switch (p.getPayloadType()) {
+	case CONNECT:
+	    sendOnClientConnect(p.getClientName(), p.getMessage());
+	    break;
+	case DISCONNECT:
+	    sendOnClientDisconnect(p.getClientName(), p.getMessage());
+	    break;
+	case MESSAGE:
+	    sendOnMessage(p.getClientName(), p.getMessage());
+	    break;
+	case CLEAR_PLAYERS:
+	    sendOnChangeRoom();
+	    break;
+	    
+	case GET_ROOMS:
+		sendRoom(p.getMessage());
+		break;
+
+	default:
+	    log.log(Level.WARNING, "unhandled payload on client" + p);
+	    break;
+
+	}
+    }
+
+    // TODO Start public methods here
+
+    public void registerCallbackListener(Event e) {
+	events.add(e);
+	log.log(Level.INFO, "Attached listener");
+    }
+
+    public void removeCallbackListener(Event e) {
+	events.remove(e);
+    }
+
+    public boolean connectAndStart(String address, String port) throws IOException {
+	if (connect(address, port)) {
+	    return start();
+	}
+	return false;
+    }
+
+    public boolean connect(String address, String port) {
+	try {
+	    server = new Socket(address, Integer.parseInt(port));
+	    log.log(Level.INFO, "Client connected");
+	    return true;
+	}
+	catch (UnknownHostException e) {
+	    e.printStackTrace();
+	}
+	catch (IOException e) {
+	    e.printStackTrace();
+	}
+	return false;
+    }
+
+    public void setUsername(String username) {
+	clientName = username;
+	sendPayload(buildConnectionStatus(clientName, true));
+    }
+
+    public void sendMessage(String message) {
+	sendPayload(buildMessage(message));
+    }
+
+    public void sendCreateRoom(String room) {
+	Payload p = new Payload();
+	p.setPayloadType(PayloadType.CREATE_ROOM);
+	p.setMessage(room);
+	sendPayload(p);
+    }
+
+    public void sendJoinRoom(String room) {
+	Payload p = new Payload();
+	p.setPayloadType(PayloadType.JOIN_ROOM);
+	p.setMessage(room);
+	sendPayload(p);
+    }
+
+    public void sendGetRooms(String query) {
+	Payload p = new Payload();
+	p.setPayloadType(PayloadType.GET_ROOMS);
+	p.setMessage(query);
+	sendPayload(p);
+    }
+
+    public boolean start() throws IOException {
+	if (server == null) {
+	    log.log(Level.WARNING, "Server is null");
+	    return false;
+	}
+	if (clientThread != null && clientThread.isAlive()) {
+	    log.log(Level.SEVERE, "Client thread is already active");
+	    return false;
+	}
+	if (clientThread != null) {
+	    clientThread.interrupt();
+	    clientThread = null;
+	}
+	log.log(Level.INFO, "Client Started");
+	clientThread = new Thread() {
+	    @Override
+	    public void run() {
+
+		// listen to console, server in, and write to server out
+		try (ObjectOutputStream out = new ObjectOutputStream(server.getOutputStream());
+			ObjectInputStream in = new ObjectInputStream(server.getInputStream());) {
+		    SocketClient.out = out;
+
+		    // starts new thread
+		    listenForServerMessage(in);
+
+		    // Keep main thread alive until the socket is closed
+		    // initialize/do everything before this line
+		    // (Without this line the program would stop after the first message
+		    while (!server.isClosed()) {
+			Thread.sleep(51);
+		    }
+		    log.log(Level.INFO, "Client Thread stopping");
+		}
+		catch (Exception e) {
+		    e.printStackTrace();
+		}
+		finally {
+		    close();
+		}
+	    }
+	};
+	clientThread.start();
+	return true;
+    }
+
+    public void close() {
+	if (server != null && !server.isClosed()) {
+	    try {
+		server.close();
+		log.log(Level.INFO, "Closed Socket");
+	    }
+	    catch (IOException e) {
+		e.printStackTrace();
+	    }
+	}
+    }
 }
