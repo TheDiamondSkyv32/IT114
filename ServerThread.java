@@ -6,6 +6,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
@@ -24,14 +25,41 @@ public class ServerThread extends Thread {
 
 	// Mute list here
     public boolean isMuted(String client) {
-    	for(String name : mutedList) {
-    		if(name.equals(clientName)) {
-    			return true;
-    		}
-    	}
-    	return false; // if we hit this condition, we did NOT find the user and return false
+    	clientName = clientName.trim().toLowerCase(); // case-insensitive
+//    	for(String name : mutedList) {
+//    		if(name.equals(clientName)) {
+//    			return true;
+//    		}
+//    	}
+//    	return false; // if we hit this condition, we did NOT find the user and return false
+    	return mutedList.contains(client); //easier way of finding it and easier on eyes
     }
-        
+    
+    public void mute(String username) {
+    	username = username.trim().toLowerCase();
+    	if (!isMuted(username)) {
+    		mutedList.add(username);
+    		save();
+    	}
+    }
+    
+    public void unmute(String username) {
+    	username = username.trim().toLowerCase();
+    	if (isMuted(username)) {
+    		mutedList.remove(username);
+    		save();
+    	}
+    }
+    
+    void save() {
+    	String data = clientName + ":" + String.join(",",  mutedList);
+    	System.out.println(data);
+    }
+      
+    void load() {
+    	String data_from_file = "";
+    	mutedList = Arrays.asList(data_from_file.split(",")); // parsing it out
+    }
 
     public String getClientName() {
 	return clientName;
@@ -87,6 +115,7 @@ public class ServerThread extends Thread {
      * @return
      */
     protected boolean send(String clientName, String message) {
+    	
 	Payload payload = new Payload();
 	payload.setPayloadType(PayloadType.MESSAGE);
 	payload.setClientName(clientName);
@@ -174,7 +203,6 @@ public class ServerThread extends Thread {
 		String room = iter.next();
 		if (room != null && !room.equalsIgnoreCase(currentRoom.getName())) {
 		    if (!sendRoom(room)) {
-			// if an error occurs stop spamming
 			break;
 		    }
 		}
