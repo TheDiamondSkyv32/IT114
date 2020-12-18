@@ -9,4 +9,6 @@ public interface Event {
     void onMessageReceive(String clientName, String message);
 
     void onChangeRoom();
+    
+    void onIsMuted(String clientName, boolean isMuted);
 }
