@@ -1,5 +1,6 @@
 package server;
 import java.util.ArrayList;
+import java.awt.Color;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
@@ -64,7 +65,7 @@ public class Room implements AutoCloseable {
 	while (iter.hasNext()) {
 	    ServerThread c = iter.next();
 	    if (c != client) {
-		boolean messageSent = client.sendConnectionStatus(c.getClientName(), true, null);
+	    	client.sendConnectionStatus(c.getClientName(), true, null);
 	    }
 	}
     }
@@ -117,8 +118,8 @@ public class Room implements AutoCloseable {
      * @param client  The sender of the message (since they'll be the ones
      *                triggering the actions)
      */
-	private boolean processCommands(String message, ServerThread client) {
-		boolean wasCommand = false;
+	private String processCommands(String message, ServerThread client) {
+		String response = null;
 		try {
 			if (message.indexOf(COMMAND_TRIGGER) > -1) {
 			String[] comm = message.split(COMMAND_TRIGGER);
@@ -136,12 +137,10 @@ public class Room implements AutoCloseable {
 				if (server.createNewRoom(roomName)) {
 				joinRoom(roomName, client);
 				}
-				wasCommand = true;
 				break;
 			case JOIN_ROOM:
 				roomName = comm2[1];
 				joinRoom(roomName, client);
-				wasCommand = true;
 				break;
 
 			case FLIP:
@@ -149,29 +148,29 @@ public class Room implements AutoCloseable {
 				int coin = rand.nextInt(2);
 				String tempMessage_;
 				if (coin == 1){
-					tempMessage_ = ("<b style=color:orange>The results of the coin toss is... Heads!</b>");
-				}
+					tempMessage_ = ("<font color=orange>The results of the coin toss is... Heads!</font>");
+				} 
 				else{
-					tempMessage_ = ("<b style=color:red>The results of the coin toss is... Tails!</b>");
+					tempMessage_ = ("<font color=red>The results of the coin toss is... Tails!</font>");
 				}
-				sendMessage(client, tempMessage_);
-				wasCommand = true;
+				//sendMessage(client, tempMessage_);
+				response = tempMessage_;
 				break;
 		case ROLL:
 			//TODO - let the user decide the upper-bound of the roll
 				Random rand_1 = new Random();
 				int dice = rand_1.nextInt(100) + 1;
-				String tempMessage = ("<b style=coloryellow>You rolled a " + Integer.toString(dice) + " point(s)</b>");
-				sendMessage(client, tempMessage);
-				wasCommand = true;
+				String tempMessage = ("<b style=color:yellow>You rolled a " + Integer.toString(dice) + " point(s)</b>");
+				//sendMessage(client, tempMessage);
+				response = tempMessage;
 				break;
 				
 		case MUTE:
 			String[] parseUserName = message.split(" ");
 			String userToBeMuted = parseUserName[1]; // /mute Meme -> [0] == /mute, [1] == Meme, the username we are looking for
 			client.mutedList.add(userToBeMuted);
-			sendMessage(client, "<i> has muted " + userToBeMuted + "</i>!");
-			wasCommand = true;
+			//sendMessage(client, "<i> has muted " + userToBeMuted + "</i>!");
+			sendDM(client, "<font color=red>You have muted " + userToBeMuted + "!</font>");
 			break;
 			
 		case UNMUTE:
@@ -180,19 +179,55 @@ public class Room implements AutoCloseable {
 			for (String name : client.mutedList) {
 				if(name.equals(userToBeUnmuted)) {
 					client.mutedList.remove(userToBeUnmuted);
-					sendMessage(client, "<i> has unmuted " + "</b>!");
-					wasCommand = true;
+					//sendMessage(client, "<i> has unmuted " + "</b>!");
+					sendDM(client, "<font color=blue>You have unmuted " + userToBeUnmuted + "!</font>");
 					break;
 				}
 			}
+		default:
+			response = message;
+			break;
+			
 			}
 			}
-		}
+			else {	
+				response = message;
+				
+				if (response.indexOf("##") > -1) {
+					String[] s1 = response.split("##");
+					String m = "";					
+					for (int i = 1; i < s1.length; i++) {
+						if(i % 2 == 0) {
+							m += s1[i];
+						}
+						else {
+							m += "<b><font style=color:blue>" + s1[i] + "</font></b>";
+						}
+					}
+					response = m;
+				}
+				if (response.indexOf("!!") > -1) {
+					String[] s1 = response.split("!!");
+					String m = "";
+					
+					for (int i = 1; i < s1.length; i++) {
+						if(i % 2 == 0) {
+							m += s1[i];
+						}
+						else {
+							m += "<u><font style=color:red>" + s1[i] + "</font></u>";
+						}
+					}
+					response = m;
+				}
+
+			}
+		} // can't use @@, logic / something funky is happening
 		catch (Exception e) {
 			e.printStackTrace();
 		}
-		return wasCommand;
-		}
+		return response;
+	}
 
 
     protected void sendConnectionStatus(ServerThread client, boolean isConnect, String message) {
@@ -217,7 +252,9 @@ public class Room implements AutoCloseable {
      */
     protected void sendMessage(ServerThread sender, String message) {
 	log.log(Level.INFO, getName() + ": Sending message to " + clients.size() + " clients");
-	if (processCommands(message, sender)) {
+	String resp = processCommands(message, sender);
+	
+	if (resp == null) {
 	    // it was a command, don't broadcast
 	    return;
 	}
@@ -226,19 +263,22 @@ public class Room implements AutoCloseable {
 		return;
 	}
 	
+	message = resp;
+	
 	Iterator<ServerThread> iter = clients.iterator();
 	while (iter.hasNext()) {
 	    ServerThread client = iter.next();
 	    
 	    if(!client.isMuted(sender.getClientName())) {
-	    	boolean messageSent = client.send(sender.getClientName(), message);
+		    boolean messageSent = client.send(sender.getClientName(), message);
 	    	if (!messageSent) {
 	    		iter.remove();
 	    		log.log(Level.INFO, "Removed client " + client.getId());
 	    	}
 	    }
-	    }
+	}
     }
+	
     protected boolean sendDM(ServerThread sender, String message) {
     	boolean wasDM = false;
     	String temp = null;
