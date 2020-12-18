@@ -169,7 +169,10 @@ public class Room implements AutoCloseable {
 			String[] parseUserName = message.split(" ");
 			String userToBeMuted = parseUserName[1]; // /mute Meme -> [0] == /mute, [1] == Meme, the username we are looking for
 			client.mutedList.add(userToBeMuted);
+			client.mute(userToBeMuted);
 			//sendMessage(client, "<i> has muted " + userToBeMuted + "</i>!");
+			//client.onIsMuted(userToBeMuted, true);
+			
 			sendDM(client, "<font color=red>You have muted " + userToBeMuted + "!</font>");
 			break;
 			
@@ -179,6 +182,7 @@ public class Room implements AutoCloseable {
 			for (String name : client.mutedList) {
 				if(name.equals(userToBeUnmuted)) {
 					client.mutedList.remove(userToBeUnmuted);
+					client.unmute(userToBeUnmuted);
 					//sendMessage(client, "<i> has unmuted " + "</b>!");
 					sendDM(client, "<font color=blue>You have unmuted " + userToBeUnmuted + "!</font>");
 					break;
