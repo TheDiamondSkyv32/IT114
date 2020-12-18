@@ -11,6 +11,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.BufferedReader;
+import java.io.FileReader;
 
 public class ServerThread extends Thread {
     private Socket client;
@@ -53,13 +57,45 @@ public class ServerThread extends Thread {
     
     void save() {
     	String data = clientName + ":" + String.join(",",  mutedList);
+    	try {
+    		File file = new File("mutedList.txt");
+    		if(file.createNewFile()) {
+    			System.out.println("Saved the mute list.");
+    		}
+    		else {
+    			System.out.println("Something has occurred.");
+    		}
+    	}
+    	catch (Exception e) {
+    		System.err.println(e);
+    	}
     	System.out.println(data);
+    	try {
+    		FileWriter filewrite = new FileWriter("mutedList.txt");
+    		filewrite.write(mutedList.toString());
+    		filewrite.close();
+    	}
+		catch(IOException e) {
+			e.printStackTrace();
+		}
+
     }
       
     void load() {
-    	String data_from_file = "";
-    	mutedList = Arrays.asList(data_from_file.split(",")); // parsing it out
-    }
+    	try {
+    		BufferedReader br = new BufferedReader(new FileReader("mutedList.txt"));
+    		StringBuilder sb = new StringBuilder();
+    		String text = br.readLine();
+    		while (text != null) {
+    			sb.append(text);
+    			text = br.readLine();
+    		}
+    		
+    		mutedList = Arrays.asList(sb.toString().split(","));
+    	}catch(IOException e) {
+    		e.printStackTrace();
+    	}
+    	    }
 
     public String getClientName() {
 	return clientName;
