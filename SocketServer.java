@@ -17,7 +17,7 @@ public class SocketServer {
     private List<Room> isolatedPrelobbies = new ArrayList<Room>();
     private final static String PRELOBBY = "PreLobby";
     protected final static String LOBBY = "Lobby";
-    private final static Logger log = Logger.getLogger(SocketServer.class.getName());
+    private final static Logger log = Logger.getLogger(SocketServer.class.getName()); 
 
     private void start(int port) {
 	this.port = port;
